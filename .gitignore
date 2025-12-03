@@ -1,0 +1,10 @@
+*.parquet
+*.csv
+
+regions/
+
+*.log
+*.tmp
+
+
+
