@@ -40,7 +40,7 @@ regions=(
 "Nouvelle-Aquitaine"
 "Occitanie"
 "Pays de la Loire"
-"Provence-Alpes-Côte d'Azur"
+"Sud"
 )
 
 # Si filtre région

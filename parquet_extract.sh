@@ -1,10 +1,5 @@
 #!/bin/bash
 set -e
-shopt -s expand_aliases   # nécessaire pour que les alias soient reconnus
-alias ogr2ogr-latest='docker run --rm --init -v "$PWD":"$PWD" -w "$PWD" --user $(id -u):$(id -g) ghcr.io/osgeo/gdal:alpine-normal-latest  ogr2ogr'
-alias ogrinfo-latest='docker run --rm --init -v "$PWD":"$PWD" -w "$PWD" --user $(id -u):$(id -g) ghcr.io/osgeo/gdal:alpine-normal-latest ogrinfo'
-
-output_format="ods"
 
 trap 'echo "💥 Interruption !"; pkill -P $$; exit 1' SIGINT
 
@@ -13,7 +8,7 @@ parquet_file="$1"    # fichier parquet à traiter
 region="$2"          # nom de la région
 year="$3"            # année
 
-input_file="dnd_entrant.parquet"
+
 registre_name=$(basename "$input_file")  # pour nommer le CSV final
 
 # Départements par région
@@ -30,10 +25,7 @@ regions["Normandie"]="14,27,50,61,76"
 regions["Nouvelle-Aquitaine"]="16,17,19,23,24,33,40,47,64,79,86,87"
 regions["Occitanie"]="09,11,12,30,31,32,34,46,48,65,66,81,82"
 regions["Pays de la Loire"]="44,49,53,72,85"    
-regions["Provence-Alpes-Côte d'Azur"]="04,05,06,13,83,84"
-
-layer_name=$(ogrinfo-latest "$parquet_file" | grep -oP '1: \K\w+')
-#echo "layer name : $layer_name"
+regions["Sud"]="04,05,06,13,83,84"
 
 possible_code_fields=(
     "destinataire_code_commune"
@@ -51,16 +43,17 @@ possible_code_fields=(
 
 )
 
-layer_schema=$(ogrinfo-latest "$parquet_file" "$layer_name" -so)
+columns=$(duckdb -csv -c "SELECT name FROM parquet_schema('$parquet_file');" \
+          | tail -n +2 \
+          | sort)
 
 existing_fields=()
+
 for f in "${possible_code_fields[@]}"; do
-    if echo "$layer_schema" | grep -qE "^$f:"; then
+    if echo "$columns" | grep -q "^$f$"; then
         existing_fields+=("$f")
     fi
 done
-
-    
 
 
 if [ ${#existing_fields[@]} -eq 0 ]; then
@@ -69,7 +62,6 @@ if [ ${#existing_fields[@]} -eq 0 ]; then
 fi
 
 deps=${regions[$region]}
-
 
 echo "🔍 Champs de filtre : ${existing_fields[@]}"
 echo "ℹ️ Departement: $deps"
@@ -92,9 +84,20 @@ end_date="$((year+1))-01-01"
 
 # Fichier CSV de sortie
 registre_name=$(basename "$parquet_file")
-output_file="$out_base/${registre_name}.${output_format}"
+output_file="$out_base/${registre_name}.csv"
 
 echo "📂 Génération CSV pour région '$region', année $year -> $output_file"
-ogr2ogr-latest "$output_file" "$parquet_file" -where "( $where_clause ) AND date_creation >= '$start_date' AND date_creation < '$end_date'"
+
+duckdb -c "
+COPY (
+    SELECT *
+    FROM '$parquet_file'
+    WHERE ($where_clause)
+      AND date_creation >= '$start_date'
+      AND date_creation < '$end_date'
+) TO '$output_file' WITH (HEADER, FORMAT 'csv');
+"
+
+echo "✅ Terminé !"
 
 echo "✅ Terminé"
