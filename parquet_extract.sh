@@ -4,6 +4,8 @@ shopt -s expand_aliases   # nécessaire pour que les alias soient reconnus
 alias ogr2ogr-latest='docker run --rm --init -v "$PWD":"$PWD" -w "$PWD" --user $(id -u):$(id -g) ghcr.io/osgeo/gdal:alpine-normal-latest  ogr2ogr'
 alias ogrinfo-latest='docker run --rm --init -v "$PWD":"$PWD" -w "$PWD" --user $(id -u):$(id -g) ghcr.io/osgeo/gdal:alpine-normal-latest ogrinfo'
 
+output_format="ods"
+
 trap 'echo "💥 Interruption !"; pkill -P $$; exit 1' SIGINT
 
 # Paramètres
@@ -34,12 +36,19 @@ layer_name=$(ogrinfo-latest "$parquet_file" | grep -oP '1: \K\w+')
 #echo "layer name : $layer_name"
 
 possible_code_fields=(
+    "destinataire_code_commune"
     "destinataire_code_postal_etablissement"
+    "destinataire_ville_etablissement" # en attendant fix sur dnd_sortant
+    "destinataire_code_postal_lieu_de_depot"
     "emetteur_initial_code_postal_etablissement"
     "emetteur_code_postal_point_de_retrait"
     "emetteur_code_postal_chantier"
     "emetteur_code_commune"
-    "destinataire_code_commune"
+    "expediteur_code_commune"
+    "expediteur_code_postal_etablissement"
+    "expediteur_code_postal_lieu_de_collecte"
+    "lieu_de_collecte_code_postal_etablissement"
+
 )
 
 layer_schema=$(ogrinfo-latest "$parquet_file" "$layer_name" -so)
@@ -83,7 +92,7 @@ end_date="$((year+1))-01-01"
 
 # Fichier CSV de sortie
 registre_name=$(basename "$parquet_file")
-output_file="$out_base/${registre_name}.csv"
+output_file="$out_base/${registre_name}.${output_format}"
 
 echo "📂 Génération CSV pour région '$region', année $year -> $output_file"
 ogr2ogr-latest "$output_file" "$parquet_file" -where "( $where_clause ) AND date_creation >= '$start_date' AND date_creation < '$end_date'"
